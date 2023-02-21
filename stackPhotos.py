@@ -39,7 +39,8 @@ def createFileDict(inList, modulus=20):
             list1 = list()
         # handle end of file names that don't land on the modulus
         if index == len(inList):
-            fileDict[listCount]=list1
+            if len(list1) > 0:  # ensure we have something valid to save
+              fileDict[listCount]=list1
 
     return fileDict
 
@@ -83,10 +84,10 @@ with os.scandir() as it:
             fList.append(entry.name) # no guarrenteed order
 
 fList.sort() # place filenames in sorted order
-allFileDict = createFileDict(fList, modulus=10)  # 20 files per dictionary entry
+allFileDict = createFileDict(fList, modulus=10)  # 10 files per dictionary entry
 
 subject=input("\n\t Enter the subject name (one word) : ")
-summaryTxt = "\t Processing {numF} total images of{subj} in {chk} chunks"
+summaryTxt = "\t Processing {numF} total images of < {subj} > in {chk} chunks"
 print(summaryTxt.format(numF=len(fList), subj=subject, chk=len(allFileDict)))
 
 tempStackedFileList = [] # keep track of output stack name of each chunk
