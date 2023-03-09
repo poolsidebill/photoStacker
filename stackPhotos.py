@@ -13,6 +13,7 @@
 import os
 import subprocess
 from datetime import datetime
+import cv2
 
 
 def createFileDict(inList, modulus=20):
@@ -55,11 +56,11 @@ def executeAlignCmd(fileList):
     result = runSubProcess(cmd) # cmd results printed in this function
     return result.returncode
 
-def executeStackCmd(stackedFileName):
+def executeStackCmd(stackedFileName, inputFile='OUT*.tif'):
     outFile = " --output="+stackedFileName
     cmd="enfuse --exposure-weight=0 --saturation-weight=0 --contrast-weight=1 --hard-mask"
     cmd +=outFile
-    cmd += ' OUT*.tif'
+    cmd += (" "+ inputFile)
     # run in shell mode so wildcards can be accepted
     result = subprocess.run(cmd, capture_output=True, encoding='UTF-8', shell=True)
     print("\t\t", result)
@@ -111,14 +112,18 @@ try :
         deleteFiles("OUT*.tif")
 
     print(" tempStackedFileList = ", tempStackedFileList)
-    # align and stack the temp stacked files to create final image
-    executeAlignCmd(tempStackedFileList)
 
     # create unique file name
     fts=datetime.now().strftime("%Y%m%d_%H%M%S.tif") #add file timestamp to make it unique
     ofnTxt="{subj}Stacked{fnum}_{ts}"
     ofn=ofnTxt.format(subj=subject, fnum=len(fList), ts=fts) # output file name
-    executeStackCmd(ofn)
+
+    # align and stack the temp stacked files to create final image
+    if len(tempStackedFileList) > 1:
+       executeAlignCmd(tempStackedFileList)
+       executeStackCmd(ofn)
+    else:
+       executeStackCmd(ofn, "stack_0.tif")
 
     # Housecleaning
     deleteFiles("OUT*.tif")
@@ -129,6 +134,16 @@ try :
     print("\t       Stacking of ",len(fList)," images completed - "+ofn+"\n")
     print("\t\t Total processing time = ",stopTime-startTime)
     print("\t ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
+    # display final stacked image. Used OpenCV beccause Pillow could not handle
+    # 16bit color image
+    img = cv2.imread(ofn)
+    width = int(img.shape[1]*.25)
+    height = int(img.shape[0]*.25)
+    image = cv2.resize(img, (width,height))
+    cv2.imshow(ofn+" resized to 25% for quick display - Press any key to close", image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 except Exception as e:
     print(e)
