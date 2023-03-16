@@ -37,17 +37,18 @@ def createFileDict(inList, modulus=20):
         if index % modulus == 0:
             fileDict[listCount]=list1  # store entry list into dictionary
             listCount+=1
-            list1 = list()
+            list1 = []
         # handle end of file names that don't land on the modulus
         if index == len(inList):
             if len(list1) > 0:  # ensure we have something valid to save
-              fileDict[listCount]=list1
+                fileDict[listCount]=list1
 
     return fileDict
 
 def runSubProcess(cmdList):
     result = subprocess.run(cmdList, capture_output=True, encoding='UTF-8')
-    print("\t\t",result.stdout)
+    print("\t\t {}\n".format(result.stdout))
+    #print("\t\t",result.stdout)
     result.check_returncode()  # throws CalledProcessError if returncode is non-zero
     return result  # returns class subprocess.CompletedProcess
 
@@ -63,7 +64,7 @@ def executeStackCmd(stackedFileName, inputFile='OUT*.tif'):
     cmd += (" "+ inputFile)
     # run in shell mode so wildcards can be accepted
     result = subprocess.run(cmd, capture_output=True, encoding='UTF-8', shell=True)
-    print("\t\t", result)
+    print("\t\t {}\n".format(result))
     return result.returncode
 
 def deleteFiles(fileName):
@@ -72,6 +73,15 @@ def deleteFiles(fileName):
     result = subprocess.run(cmd, capture_output=True, encoding='UTF-8', shell=True)
     print("\t\t", result)
     return result.returncode
+
+def updateEXIF(inFile, outFile):
+    print("\n\t\t Restore/update EXIF tags from {} into {}".format(inFile, outFile))
+    cmd = "exiftool -tagsFromFile "+inFile
+    cmd+=" -overwrite_original "+outFile
+    result = subprocess.run(cmd, capture_output=True, encoding='UTF-8', shell=True)
+    print("\t\t {}\n".format(result))
+    return result.returncode
+
 
 # Main
 
@@ -108,7 +118,7 @@ try :
         tempStackedFileList.append(tempStackFilename) # keep track of filename
 
         #   remove OUTxxx.tif files created by align command
-        print("\n\t\tdeleting temp pictures...")
+        print("\t\tdeleting temp pictures...")
         deleteFiles("OUT*.tif")
 
     print(" tempStackedFileList = ", tempStackedFileList)
@@ -120,10 +130,12 @@ try :
 
     # align and stack the temp stacked files to create final image
     if len(tempStackedFileList) > 1:
-       executeAlignCmd(tempStackedFileList)
-       executeStackCmd(ofn)
+        executeAlignCmd(tempStackedFileList)
+        executeStackCmd(ofn)
     else:
-       executeStackCmd(ofn, "stack_0.tif")
+        executeStackCmd(ofn, "stack_0.tif")
+
+    updateEXIF(fList[0], ofn)
 
     # Housecleaning
     deleteFiles("OUT*.tif")
