@@ -9,13 +9,14 @@ This program uses the **align_image_stack** and **enfuse** utilities from the [H
 | Python   | 3.8.10|
 |opencv-python   | 4.7.0.72  |
 | Hugin   | Hugin-2022.0.0 |
+|ExifTool   | 11.88  |
 | Linux Mint | 20.3  |
 
-While Hugin is cross-platform toolchain, my repository is based on the Linux version and underlining Linux file operations. OpenCV is used to display a 25% scaled version of the final stacked image for a quick image review.
+While Hugin is cross-platform toolchain, my repository is based on the Linux version and underlining Linux file operations. ExifTool is used to copy EXIF camera/image information from first original image to the final stacked image. OpenCV is used to display a 25% scaled version of the final stacked image for a quick image review.
  **Note:** Unable to use Pillow to display image because it does not support 16bit color TIFF files at this time.
 
 ## Operation
 **photoStacker.py** performs the following actions:
 - Prompts for subject name. Used to create a unique output file name
 -- file name = subjectName+"Stacked"+numImagesProcessed_YYYYMMDD_HHMMSS.tif
-- Reads all image filenames from current directory, sorts them in assending order, and adds them to a dictionary to process. Currently, default is for 10 files to be processed at a time 
+- Reads all image filenames from current directory, sorts them in assending order, and adds them to a dictionary to process. Currently, default is for 10 files to be processed at a time
