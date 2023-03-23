@@ -8,13 +8,53 @@
     Macro photograpy projects can take hundreds of images, this program will
     process them in chunks of 10 images at a time to keep memory usage reasonable.
     Original images are not modified and final image has an unique name.
+
+    Invoke from directory containing images to be stacked
+    $ python3 stackPhotos.py
     """
 
 import os
 import subprocess
+import time
 from datetime import datetime
 import cv2
+import rawpy
+from PIL import Image
 
+RAW_FORMATS = ['CR2', 'CR3', 'NEF']
+
+def isRAW(extension):
+    """ Determine if input extension type is a supported RAW file type
+
+    Args:
+       extension - filename extension, case insensitive (i.e. jpg, CR3)
+    Returns:
+    boolean True if RAW extension, False otherwise
+    """
+    result = False
+    if extension.upper() in RAW_FORMATS:
+        result = True
+    return result
+
+def determineFileTypes():
+    """ Return a dictionary of all file types in current directory
+
+    Create a dictionary of all file extensions and the count of each type
+    from the current directory
+
+    Returns:
+    ftDict - file type dictionary
+    """
+    ftDict = {} # file type dictionary
+    with os.scandir() as it:
+        for entry in it:
+            name = entry.name.split('.')
+            # print('looking at extension: '+name[-1])
+            if name[-1] in ftDict:
+                ftDict[name[-1]] += 1
+            else:
+                ftDict[name[-1]] = 1
+    return ftDict
 
 def createFileDict(inList, modulus=20):
     """ Create dictionary from a list of files
@@ -52,9 +92,48 @@ def runSubProcess(cmdList):
     result.check_returncode()  # throws CalledProcessError if returncode is non-zero
     return result  # returns class subprocess.CompletedProcess
 
-def executeAlignCmd(fileList):
-    cmd = ["align_image_stack", "-m", "-a", "OUT"]+fileList
+def convertRaw(files, useJpg=True):
+    """ Convert RAW images into JPG or TIFF format for later processing.
+    Take a list of filenames and convert them from RAW to a format that can be
+    alighned and stacked. Images are either saved as JPEG or TIFF format. Testing
+    determined that JPEG format was stacked with better details, so this is the
+    default. Return a list of new unique filenames of the converted images so the
+    original images are preserved in the directory.
+    Args:
+       files - List of all file names from current directory to process
+
+    Returns:
+       List of new filenames saved in current directory
+     """
+    convertedFiles = []
+    for srcFile in files:
+        name = srcFile.split('.')
+        raw = rawpy.imread(srcFile)
+        rgb = raw.postprocess(use_camera_wb=True)
+
+        if useJpg:
+            fname = name[0]+'_temp.JPG'
+            Image.fromarray(rgb).save(fname, quality=99, optimize=True)
+        else:
+            fname = name[0]+'_temp.TIFF'
+            Image.fromarray(rgb).save(fname)
+
+        convertedFiles.append(fname)
+        raw.close()
+    return convertedFiles
+
+def executeAlignCmd(fileList, imageExtension):
+    images = []
+    if isRAW(imageExtension):
+        images = convertRaw(fileList)
+    else:
+        images = fileList
+    cmd = ["align_image_stack", "-m", "-a", "OUT"]+images
     result = runSubProcess(cmd) # cmd results printed in this function
+    if isRAW(imageExtension):
+        # delete temp files to save disk space. Original RAW images not not touched
+        for name in images:
+            deleteFiles(name)
     return result.returncode
 
 def executeStackCmd(stackedFileName, inputFile='OUT*.tif'):
@@ -84,14 +163,27 @@ def updateEXIF(inFile, outFile):
 
 
 # Main
+# examine current directory, print file extensions, and prompt user for which
+# file types to process
+fTypes = determineFileTypes()
+print('e\t Directory contains the following file types:')
+for entry in fTypes:
+    print('\t Extension: {} \t Entries: {}'.format(entry, fTypes[entry]))
+while True:
+    imageType = input('\n\t Select a image file type to stack: ')
+    if imageType in fTypes.keys():
+        break
 
-print("\n\t Starting to stack all JPG images")
+    print('\t Invalid selection: '+imageType) # loop back up and prompt again
+
+print("\n\t Starting to stack all {} images".format(imageType))
 startTime = datetime.now()
 
+# fetch list of file names associated with the selected image type
 fList=[]
 with os.scandir() as it:
     for entry in it:
-        if entry.name.endswith(".JPG"):
+        if entry.name.endswith("."+imageType):
             fList.append(entry.name) # no guarrenteed order
 
 fList.sort() # place filenames in sorted order
@@ -109,7 +201,7 @@ try :
         print("\t\taligning pictures...")
 
         #   create align command and execute it
-        executeAlignCmd(allFileDict.get(key))
+        executeAlignCmd(allFileDict.get(key), imageType)
 
         #   create enfuse command and execute it
         tempStackFilename = "stack_"+str(key)+".tif"
@@ -130,11 +222,12 @@ try :
 
     # align and stack the temp stacked files to create final image
     if len(tempStackedFileList) > 1:
-        executeAlignCmd(tempStackedFileList)
+        executeAlignCmd(tempStackedFileList, "tif")
         executeStackCmd(ofn)
     else:
         executeStackCmd(ofn, "stack_0.tif")
 
+    time.sleep(5) # let final image flush to disk
     updateEXIF(fList[0], ofn)
 
     # Housecleaning
@@ -146,6 +239,8 @@ try :
     print("\t       Stacking of ",len(fList)," images completed - "+ofn+"\n")
     print("\t\t Total processing time = ",stopTime-startTime)
     print("\t ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+
+    time.sleep(2)
 
     # display final stacked image. Used OpenCV beccause Pillow could not handle
     # 16bit color image
